@@ -41,13 +41,13 @@ final class USCN_Admin {
 
 	public static function brand_name() {
 		$b = get_option( 'uscn_branding' );
-		return ( is_array( $b ) && ! empty( $b['name'] ) ) ? $b['name'] : 'Unstoppable Site Connector';
+		return ( is_array( $b ) && ! empty( $b['name'] ) && USCN_Security::allowed( 'branding' ) ) ? $b['name'] : 'Unstoppable Site Connector';
 	}
 
 	public static function white_label( $plugins ) {
 		$b    = get_option( 'uscn_branding' );
 		$base = plugin_basename( USCN_FILE );
-		if ( is_array( $b ) && isset( $plugins[ $base ] ) ) {
+		if ( is_array( $b ) && isset( $plugins[ $base ] ) && USCN_Security::allowed( 'branding' ) ) {
 			foreach ( array( 'name' => 'Name', 'author' => 'Author', 'description' => 'Description' ) as $key => $field ) {
 				if ( ! empty( $b[ $key ] ) ) {
 					$plugins[ $base ][ $field ] = $b[ $key ];
@@ -314,7 +314,7 @@ final class USCN_Admin {
 		$msg   = isset( $_GET['uscn_msg'] ) ? sanitize_key( $_GET['uscn_msg'] ) : ''; // phpcs:ignore WordPress.Security.NonceVerification
 		?>
 		<div class="wrap">
-			<h1><?php echo esc_html( self::brand_name() ); ?></h1>
+			<h1><?php echo esc_html( self::brand_name() ); ?><?php if ( 'Unstoppable Site Connector' !== self::brand_name() ) : ?> <span class="uscn-muted" style="font-size:14px;font-weight:400;">(Unstoppable Site Connector)</span><?php endif; ?></h1>
 
 			<?php $maint = USCN_Maintenance::get(); ?>
 			<?php if ( $maint['on'] ) : ?>

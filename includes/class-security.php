@@ -40,7 +40,7 @@ final class USCN_Security {
 			'install_wporg' => __( 'Install plugins from WordPress.org', 'unstoppable-site-connector' ),
 			'install_zip'   => __( 'Install plugins from a ZIP file or web address', 'unstoppable-site-connector' ),
 			'delete'        => __( 'Delete plugins', 'unstoppable-site-connector' ),
-			'branding'      => __( 'Set the admin footer branding', 'unstoppable-site-connector' ),
+			'branding'      => __( 'Set branding (admin footer text and the name this plugin is listed under)', 'unstoppable-site-connector' ),
 			'maintenance'   => __( 'Turn maintenance mode on and off', 'unstoppable-site-connector' ),
 		);
 	}
