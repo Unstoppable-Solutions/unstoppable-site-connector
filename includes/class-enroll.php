@@ -16,6 +16,7 @@ final class USCN_Enroll {
 
 	const HOOK  = 'uscn_enroll';
 	const STATE = 'uscn_enroll';
+	const CFG   = 'uscn_enroll_cfg'; // The file's contents, kept here so the file itself (public) can go.
 	const TRIES = 8;
 
 	public static function hooks() {
@@ -27,17 +28,30 @@ final class USCN_Enroll {
 		return USCN_DIR . 'enroll.json';
 	}
 
-	/** The bulk-connect settings shipped in this copy, or null. */
+	/**
+	 * The bulk-connect settings shipped in this copy, or null. The file sits in the
+	 * plugin folder, which the web server serves to anyone, so it is read once into
+	 * the database and deleted.
+	 */
 	public static function config() {
 		$f = self::file();
-		if ( ! is_readable( $f ) ) {
-			return null;
+		if ( is_readable( $f ) ) {
+			$c = json_decode( (string) file_get_contents( $f ), true ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- local file in this plugin.
+			wp_delete_file( $f );
+			if ( is_array( $c ) && ! USCN_Auth::is_paired() ) {
+				update_option( self::CFG, $c, false );
+			}
 		}
-		$c = json_decode( (string) file_get_contents( $f ), true ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- local file in this plugin.
+		$c = get_option( self::CFG );
 		if ( ! is_array( $c ) || empty( $c['enroll'] ) || empty( $c['pass'] ) || ! wp_http_validate_url( $c['enroll'] ) ) {
 			return null;
 		}
 		return $c;
+	}
+
+	/** Forget the pass once it has been used or given up on. */
+	private static function forget() {
+		delete_option( self::CFG );
 	}
 
 	public static function state() {
@@ -47,11 +61,19 @@ final class USCN_Enroll {
 
 	/** Schedule an attempt while this copy has a pass, the site isn't connected and we haven't given up. */
 	public static function maybe_schedule() {
-		$s = self::state();
-		if ( ! empty( $s['done'] ) || ( isset( $s['tries'] ) && $s['tries'] >= self::TRIES ) ) {
+		$s    = self::state();
+		$over = ! empty( $s['done'] ) || ( isset( $s['tries'] ) && $s['tries'] >= self::TRIES );
+		if ( $over || USCN_Auth::is_paired() ) {
+			// Connected, or given up: the pass is no longer needed, and its file must not stay where anyone can download it.
+			if ( is_readable( self::file() ) ) {
+				wp_delete_file( self::file() );
+			}
+			if ( get_option( self::CFG ) ) {
+				self::forget();
+			}
 			return;
 		}
-		if ( USCN_Auth::is_paired() || ! self::config() ) {
+		if ( ! self::config() ) {
 			return;
 		}
 		if ( ! wp_next_scheduled( self::HOOK ) ) {
@@ -93,6 +115,7 @@ final class USCN_Enroll {
 		$code = is_wp_error( $response ) ? 0 : (int) wp_remote_retrieve_response_code( $response );
 		$body = $code ? json_decode( wp_remote_retrieve_body( $response ), true ) : null;
 		if ( 200 === $code && USCN_Auth::is_paired() ) {
+			self::forget();
 			$s['done']      = true;
 			$s['dashboard'] = isset( $c['dashboard'] ) ? sanitize_text_field( $c['dashboard'] ) : '';
 			$s['error']     = '';
@@ -104,6 +127,9 @@ final class USCN_Enroll {
 		// A pass the dashboard refused for good (wrong, ended): don't keep trying.
 		if ( in_array( $code, array( 400, 403 ), true ) ) {
 			$s['tries'] = self::TRIES;
+		}
+		if ( $s['tries'] >= self::TRIES ) {
+			self::forget();
 		}
 		update_option( self::STATE, $s, false );
 	}

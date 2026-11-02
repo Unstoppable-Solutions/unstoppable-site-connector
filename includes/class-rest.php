@@ -69,7 +69,9 @@ final class USCN_REST {
 	}
 
 	public static function pair( WP_REST_Request $request ) {
-		$failures = (int) get_transient( 'uscn_pair_failures' );
+		// Failed codes are counted per address, so a stranger can't lock everyone else out.
+		$fail_key = 'uscn_pair_fail_' . md5( USCN_Security::client_ip() );
+		$failures = (int) get_transient( $fail_key );
 		if ( $failures >= 10 ) {
 			return new WP_Error( 'uscn_locked', 'Too many failed pairing attempts. Try again in an hour.', array( 'status' => 429 ) );
 		}
@@ -93,12 +95,21 @@ final class USCN_REST {
 		$code     = isset( $p['code'] ) ? $p['code'] : '';
 		$by_code  = USCN_Auth::consume_pairing_code( $code );
 		$handover = false;
-		if ( ! $by_code && $push_url ) {
+		if ( ! $by_code && $push_url && USCN_Auth::handover_matches( $code, (string) wp_parse_url( $push_url, PHP_URL_HOST ) ) ) {
 			// A dashboard move: the code the old dashboard asked for, valid only for the new dashboard's address.
+			// Whoever holds the code must also be that dashboard: ask it for its public key.
+			$real = self::dashboard_key( $push_url );
+			if ( is_wp_error( $real ) ) {
+				return $real;
+			}
+			if ( ! hash_equals( $real, base64_encode( $pub ) ) ) {
+				set_transient( $fail_key, $failures + 1, HOUR_IN_SECONDS );
+				return new WP_Error( 'uscn_handover_key', 'This move code is only for the dashboard at that address, and that dashboard has a different key.', array( 'status' => 403 ) );
+			}
 			$handover = USCN_Auth::consume_handover_code( $code, (string) wp_parse_url( $push_url, PHP_URL_HOST ) );
 		}
 		if ( ! $by_code && ! $handover ) {
-			set_transient( 'uscn_pair_failures', $failures + 1, HOUR_IN_SECONDS );
+			set_transient( $fail_key, $failures + 1, HOUR_IN_SECONDS );
 			return new WP_Error( 'uscn_bad_code', 'Pairing code is invalid or expired. Generate a new one in Tools > Unstoppable Site Connector.', array( 'status' => 403 ) );
 		}
 		$old_dashboard = is_array( $handover ) ? $handover['from'] : '';
@@ -118,7 +129,9 @@ final class USCN_REST {
 			false
 		);
 		delete_option( 'uscn_ack_id' );
-		delete_transient( 'uscn_pair_failures' );
+		delete_option( USCN_Auth::OPT_HANDOVER ); // A pending move code no longer applies to this new connection.
+		delete_option( USCN_Auth::OPT_BOUND );    // A new dashboard may sign the older way until it is updated.
+		delete_transient( $fail_key );
 
 		USCN_Activity::$actor = 'dashboard';
 		USCN_Activity::snapshot();
@@ -152,6 +165,25 @@ final class USCN_REST {
 				'status'       => USCN_Status::collect( false ),
 			)
 		);
+	}
+
+	/**
+	 * The public key the dashboard at $push_url publishes (Unstoppable Site Manager 0.25.0 and later).
+	 *
+	 * @return string|WP_Error
+	 */
+	private static function dashboard_key( $push_url ) {
+		$url = preg_replace( '#/push/?$#', '/pubkey', (string) $push_url );
+		$url = preg_replace( '#(rest_route=[^&]*?)/push/?(&|$)#', '$1/pubkey$2', $url );
+		if ( $url === $push_url ) {
+			return new WP_Error( 'uscn_handover_dashboard', 'Could not work out the new dashboard\'s address.', array( 'status' => 400 ) );
+		}
+		$res  = wp_safe_remote_get( $url, array( 'timeout' => 20, 'redirection' => 0 ) );
+		$data = is_wp_error( $res ) ? null : json_decode( wp_remote_retrieve_body( $res ), true );
+		if ( ! is_array( $data ) || empty( $data['public_key'] ) || ! is_string( $data['public_key'] ) ) {
+			return new WP_Error( 'uscn_handover_dashboard', 'Could not confirm the new dashboard. Update Unstoppable Site Manager there to 0.25.0 or later, then try the move again.', array( 'status' => 502 ) );
+		}
+		return $data['public_key'];
 	}
 
 	/**

@@ -4,7 +4,7 @@ Donate link: https://unstoppablesolutions.app/donate
 Tags: manage multiple sites, updates, maintenance, remote management, agency
 Requires at least: 5.8
 Tested up to: 7.1
-Stable tag: 0.10.0
+Stable tag: 0.11.0
 Requires PHP: 7.4
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -87,6 +87,13 @@ Your host requires FTP details to change files, so remote updates can't run. Ask
 
 == Changelog ==
 
+= 0.11.0 =
+* Security: requests from Unstoppable Site Manager 0.25.0 and later name the site they are for, and this site refuses requests made for any other site. Once the dashboard sends one, older-style requests are refused for good.
+* Security: before accepting a dashboard move, the site asks the new dashboard for its public key, so a move code is useless to anyone else.
+* Security: a bulk-connect pass shipped in the plugin folder is read once into the database and the file deleted, and forgotten once used.
+* Security: failed pairing attempts are counted per address, so a stranger can't lock out pairing. A pending move code is cleared when the site is paired again or the plugin is removed.
+* Plugin files from a dashboard on https must come over https.
+
 = 0.10.0 =
 * Branding: the dashboard can also give this plugin a display name (for example "Website Care by Example Agency") for the plugin list and the Tools menu. It stays listed and active like any other plugin, its description and settings screen still say Unstoppable Site Connector, and switching off "Set branding" under Security puts the original name back.
 
@@ -133,6 +140,9 @@ Your host requires FTP details to change files, so remote updates can't run. Ask
 * Renamed from FM Connector to Unstoppable Site Connector. Takes over FM Connector's connection, settings and activity log, then removes FM Connector.
 
 == Upgrade Notice ==
+
+= 0.11.0 =
+Security update: dashboard requests are tied to this site. Update Unstoppable Site Manager to 0.25.0 as well.
 
 = 0.10.0 =
 Lets your dashboard show this plugin under its own name in the plugin list. Nothing changes until your dashboard sets a name.

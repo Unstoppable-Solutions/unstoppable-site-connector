@@ -19,6 +19,9 @@ final class USCN_Auth {
 	const PAIR_TTL    = 900; // pairing codes expire after 15 minutes.
 	const OPT_HANDOVER = 'uscn_handover';
 	const HANDOVER_TTL = DAY_IN_SECONDS; // A dashboard move has a day to finish.
+	// Set once the dashboard signs requests for this site only (site-bound signatures, 0.11.0);
+	// from then on, signatures that don't name this site are refused.
+	const OPT_BOUND    = 'uscn_sig_bound';
 
 	/* ---------- connection state ---------- */
 
@@ -38,6 +41,7 @@ final class USCN_Auth {
 		delete_option( 'uscn_ack_id' );
 		delete_option( 'uscn_last_push' );
 		delete_option( self::OPT_HANDOVER );
+		delete_option( self::OPT_BOUND );
 		USCN_Branding::clear(); // Branding belongs to the dashboard that set it.
 		USCN_Maintenance::turn_off( 'maintenance_off_here' ); // Never leave a site offline with no dashboard to switch it back.
 	}
@@ -46,18 +50,23 @@ final class USCN_Auth {
 
 	/**
 	 * The exact string both sides sign. Keep this identical in every client.
+	 *
+	 * With $site_id (dashboards from 0.25.0), the signature names this site, so a
+	 * request made for one site is refused by every other site, even though one
+	 * dashboard key manages them all.
 	 */
-	public static function canonical_string( $method, $path, $timestamp, $nonce, $body ) {
-		return implode(
-			"\n",
-			array(
-				strtoupper( (string) $method ),
-				(string) $path,
-				(string) $timestamp,
-				(string) $nonce,
-				hash( 'sha256', (string) $body ),
-			)
+	public static function canonical_string( $method, $path, $timestamp, $nonce, $body, $site_id = '' ) {
+		$parts = array(
+			strtoupper( (string) $method ),
+			(string) $path,
+			(string) $timestamp,
+			(string) $nonce,
+			hash( 'sha256', (string) $body ),
 		);
+		if ( '' !== (string) $site_id ) {
+			$parts[] = 'site:' . $site_id;
+		}
+		return implode( "\n", $parts );
 	}
 
 	/**
@@ -93,14 +102,13 @@ final class USCN_Auth {
 			return new WP_Error( 'uscn_bad_key', 'Malformed key or signature.', array( 'status' => 401 ) );
 		}
 
-		$message = self::canonical_string( $request->get_method(), $request->get_route(), $ts, $nonce, $request->get_body() );
-
-		try {
-			$ok = sodium_crypto_sign_verify_detached( $raw, $message, $pub );
-		} catch ( Throwable $e ) {
-			$ok = false;
-		}
-		if ( ! $ok ) {
+		$site_id = isset( $conn['site_id'] ) ? (string) $conn['site_id'] : '';
+		$bound   = $site_id ? self::verify( $raw, self::canonical_string( $request->get_method(), $request->get_route(), $ts, $nonce, $request->get_body(), $site_id ), $pub ) : false;
+		if ( $bound ) {
+			if ( ! get_option( self::OPT_BOUND ) ) {
+				update_option( self::OPT_BOUND, 1, false ); // The dashboard signs for this site only: never accept the older kind again.
+			}
+		} elseif ( get_option( self::OPT_BOUND ) || ! self::verify( $raw, self::canonical_string( $request->get_method(), $request->get_route(), $ts, $nonce, $request->get_body() ), $pub ) ) {
 			return new WP_Error( 'uscn_bad_signature', 'Signature check failed.', array( 'status' => 401 ) );
 		}
 
@@ -119,6 +127,14 @@ final class USCN_Auth {
 
 		USCN_Activity::$actor = 'dashboard';
 		return true;
+	}
+
+	private static function verify( $sig, $message, $pub ) {
+		try {
+			return sodium_crypto_sign_verify_detached( $sig, $message, $pub );
+		} catch ( Throwable $e ) {
+			return false;
+		}
 	}
 
 	/* ---------- this site's own keypair (for pushes) ---------- */
@@ -201,6 +217,13 @@ final class USCN_Auth {
 			false
 		);
 		return $code;
+	}
+
+	/** Is this a live move code for a dashboard at $host? (Doesn't use it up.) */
+	public static function handover_matches( $code, $host ) {
+		$h = get_option( self::OPT_HANDOVER );
+		return is_array( $h ) && ! empty( $h['hash'] ) && time() <= (int) $h['expires']
+			&& hash_equals( $h['hash'], hash( 'sha256', (string) $code ) ) && strtolower( (string) $host ) === $h['host'];
 	}
 
 	/** @return array|false The handover record when the code is valid for a dashboard at $host. */

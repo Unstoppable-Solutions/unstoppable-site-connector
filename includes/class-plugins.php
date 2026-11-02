@@ -21,6 +21,11 @@ final class USCN_Plugins {
 		$conn = USCN_Auth::connection();
 		$dash = ! empty( $conn['push_url'] ) ? strtolower( (string) wp_parse_url( $conn['push_url'], PHP_URL_HOST ) ) : '';
 		$host = strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
+		// A dashboard on https serves packages over https only, so nobody in between can swap the ZIP.
+		$https = ! empty( $conn['push_url'] ) && 'https' === strtolower( (string) wp_parse_url( $conn['push_url'], PHP_URL_SCHEME ) );
+		if ( $https && 'https' !== strtolower( (string) wp_parse_url( $url, PHP_URL_SCHEME ) ) ) {
+			return false;
+		}
 		return '' !== $dash && $host === $dash;
 	}
 
