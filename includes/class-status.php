@@ -193,7 +193,6 @@ final class USCN_Status {
 				'numberposts'      => 40,
 				'orderby'          => 'modified',
 				'order'            => 'DESC',
-				'suppress_filters' => true,
 				'no_found_rows'    => true,
 			)
 		);
