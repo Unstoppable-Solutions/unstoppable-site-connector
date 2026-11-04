@@ -8,6 +8,7 @@ foreach ( array( 'uscn_connection', 'uscn_keys', 'uscn_pairing', 'uscn_versions'
 	delete_option( $uscn_opt );
 }
 delete_transient( 'uscn_ssl' );
+delete_metadata( 'user', 0, 'uscn_last_login', '', true );
 delete_transient( 'uscn_pair_failures' );
 wp_clear_scheduled_hook( 'uscn_push' );
 wp_clear_scheduled_hook( 'uscn_push_soon' );

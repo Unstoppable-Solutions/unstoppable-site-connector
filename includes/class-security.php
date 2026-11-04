@@ -42,6 +42,7 @@ final class USCN_Security {
 			'delete'        => __( 'Delete plugins', 'unstoppable-site-connector' ),
 			'branding'      => __( 'Set branding (admin footer text and the name this plugin is listed under)', 'unstoppable-site-connector' ),
 			'maintenance'   => __( 'Turn maintenance mode on and off', 'unstoppable-site-connector' ),
+			'content'       => __( 'See staff accounts (name, email, role, last sign-in) and recent posts and pages. Subscribers and customers are only counted.', 'unstoppable-site-connector' ),
 		);
 	}
 

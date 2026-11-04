@@ -126,6 +126,97 @@ final class USCN_Status {
 				'maintenance' => USCN_Maintenance::summary(),
 			),
 			'security'    => USCN_Security::summary(),
+			'content'     => self::content(),
+		);
+	}
+
+	/** Remember each user's last sign-in, for the dashboard's Users view. */
+	public static function remember_login( $login, $user ) {
+		if ( $user instanceof WP_User ) {
+			update_user_meta( $user->ID, 'uscn_last_login', time() );
+		}
+	}
+
+	/**
+	 * Staff accounts (anyone who can write posts: authors, editors, admins and the like)
+	 * and recent posts and pages, for the dashboard's read-only Users and Content views.
+	 * Subscribers and shop customers are only counted, never listed. A site's admin can
+	 * stop sharing this under Tools > Unstoppable Site Connector > Security.
+	 */
+	private static function content() {
+		if ( ! USCN_Security::allowed( 'content' ) ) {
+			return array( 'shared' => false );
+		}
+		$staff = array();
+		foreach ( wp_roles()->roles as $slug => $role ) {
+			if ( ! empty( $role['capabilities']['edit_posts'] ) ) {
+				$staff[] = $slug;
+			}
+		}
+		$users = array();
+		if ( $staff ) {
+			$found = get_users(
+				array(
+					'role__in' => $staff,
+					'number'   => 300,
+					'orderby'  => 'registered',
+					'order'    => 'DESC',
+				)
+			);
+			foreach ( $found as $u ) {
+				$last    = (int) get_user_meta( $u->ID, 'uscn_last_login', true );
+				$users[] = array(
+					'id'         => (int) $u->ID,
+					'login'      => (string) $u->user_login,
+					'name'       => (string) $u->display_name,
+					'email'      => (string) $u->user_email,
+					'roles'      => array_values( array_map( 'strval', (array) $u->roles ) ),
+					'registered' => (int) strtotime( $u->user_registered . ' UTC' ),
+					'last_login' => $last ? $last : null,
+				);
+			}
+		}
+		$counts = count_users();
+		$posts  = array();
+		foreach ( array( 'post', 'page' ) as $type ) {
+			$c              = wp_count_posts( $type );
+			$posts[ $type ] = array();
+			foreach ( array( 'publish', 'future', 'draft', 'pending', 'private' ) as $st ) {
+				$posts[ $type ][ $st ] = isset( $c->$st ) ? (int) $c->$st : 0;
+			}
+		}
+		$recent = array();
+		$items  = get_posts(
+			array(
+				'post_type'        => array( 'post', 'page' ),
+				'post_status'      => array( 'publish', 'future', 'draft', 'pending', 'private' ),
+				'numberposts'      => 40,
+				'orderby'          => 'modified',
+				'order'            => 'DESC',
+				'suppress_filters' => true,
+				'no_found_rows'    => true,
+			)
+		);
+		foreach ( $items as $p ) {
+			$author   = get_userdata( (int) $p->post_author );
+			$recent[] = array(
+				'id'       => (int) $p->ID,
+				'type'     => (string) $p->post_type,
+				'title'    => html_entity_decode( wp_strip_all_tags( get_the_title( $p ) ), ENT_QUOTES, 'UTF-8' ),
+				'status'   => (string) $p->post_status,
+				'author'   => $author ? (string) $author->display_name : '',
+				// get_post_timestamp() copes with drafts, whose GMT dates WordPress leaves empty.
+				'date'     => (int) get_post_timestamp( $p, 'date' ),
+				'modified' => (int) get_post_timestamp( $p, 'modified' ),
+				'link'     => 'publish' === $p->post_status ? (string) get_permalink( $p ) : '',
+			);
+		}
+		return array(
+			'shared' => true,
+			'users'  => $users,
+			'roles'  => isset( $counts['avail_roles'] ) ? array_map( 'intval', $counts['avail_roles'] ) : array(),
+			'posts'  => $posts,
+			'recent' => $recent,
 		);
 	}
 
