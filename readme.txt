@@ -4,7 +4,7 @@ Donate link: https://unstoppablesolutions.app/donate
 Tags: manage multiple sites, updates, maintenance, remote management, agency
 Requires at least: 5.8
 Tested up to: 7.1
-Stable tag: 0.12.0
+Stable tag: 0.12.1
 Requires PHP: 7.4
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -87,6 +87,9 @@ Your host requires FTP details to change files, so remote updates can't run. Ask
 
 == Changelog ==
 
+= 0.12.1 =
+* Maintenance: tidied how recent posts and pages are listed for the dashboard, to meet WordPress.org coding standards. No change in how the plugin works.
+
 = 0.12.0 =
 * Shares staff accounts (anyone who can write posts: name, email, role, when added, last sign-in) and the 40 most recently changed posts and pages with the connected dashboard, for its Users and Posts & Pages screens (Unstoppable Site Manager 0.26.0). Subscribers and shop customers are only counted, never listed. Switch it off under Tools > Unstoppable Site Connector > Security > "See staff accounts and recent posts and pages".
 * Remembers each user's last sign-in time.
@@ -144,6 +147,9 @@ Your host requires FTP details to change files, so remote updates can't run. Ask
 * Renamed from FM Connector to Unstoppable Site Connector. Takes over FM Connector's connection, settings and activity log, then removes FM Connector.
 
 == Upgrade Notice ==
+
+= 0.12.1 =
+Small maintenance release. Nothing changes in how the plugin works.
 
 = 0.12.0 =
 Lets your dashboard show staff accounts and recent posts and pages, and warn you about new administrators.
